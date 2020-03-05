@@ -15,6 +15,8 @@ namespace SharePointLoader
 
         static void Main(string[] args)
         {
+
+
             AppDomain.CurrentDomain.UnhandledException += (s, e) => logger.Error( e.ExceptionObject.ToString(), "Uhandled exception in application");
 
             try
@@ -27,6 +29,14 @@ namespace SharePointLoader
             {
                 logger.Error(ex, "Error when loading configuration");
                 return;
+            }
+
+            if (args.Count()==2 && 
+                !string.IsNullOrWhiteSpace(args[0]) && 
+                !string.IsNullOrWhiteSpace(args[1]))
+            {
+                Configuration.UserName = args[0];
+                Configuration.Password = args[1];
             }
             if (string.IsNullOrWhiteSpace(Configuration.SiteName) ||
                 string.IsNullOrWhiteSpace(Configuration.UserName) ||
