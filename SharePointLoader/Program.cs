@@ -78,10 +78,7 @@ namespace SharePointLoader
         private static SharePointOnlineCredentials GetSharePointCreds()
         {
             SecureString securePassword = new SecureString();
-            for (int i = 0; i < Configuration.Password.Length; i++)
-            {
-                securePassword.AppendChar(Configuration.Password[i]);
-            }
+            Configuration.Password.ToList().ForEach(securePassword.AppendChar);
             return new SharePointOnlineCredentials(Configuration.UserName, securePassword);
         }
 
