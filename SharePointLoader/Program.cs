@@ -4,6 +4,7 @@ using System;
 using System.IO;
 using System.Linq;
 using System.Security;
+using System.Text;
 using SPClient = Microsoft.SharePoint.Client;
 namespace SharePointLoader
 {
@@ -17,7 +18,7 @@ namespace SharePointLoader
         {
 
 
-            AppDomain.CurrentDomain.UnhandledException += (s, e) => logger.Error( e.ExceptionObject.ToString(), "Uhandled exception in application");
+            AppDomain.CurrentDomain.UnhandledException += (s, e) => logger.Fatal(e.ExceptionObject.ToString(), "Uhandled exception in application");
 
             try
             {
@@ -27,23 +28,25 @@ namespace SharePointLoader
             }
             catch (Exception ex)
             {
-                logger.Error(ex, "Error when loading configuration");
+                logger.Fatal(ex, "Error when loading configuration");
                 return;
             }
 
-            if (args.Count()==2 && 
-                !string.IsNullOrWhiteSpace(args[0]) && 
+            if (args.Count() == 2 &&
+                !string.IsNullOrWhiteSpace(args[0]) &&
                 !string.IsNullOrWhiteSpace(args[1]))
-            {
+            { 
                 Configuration.UserName = args[0];
                 Configuration.Password = args[1];
-            }
+            } 
+
             if (string.IsNullOrWhiteSpace(Configuration.SiteName) ||
                 string.IsNullOrWhiteSpace(Configuration.UserName) ||
                 string.IsNullOrWhiteSpace(Configuration.Password) ||
                 !Configuration.FileLinks.Any()
             )
             {
+
                 logger.Error("Configuration uncorrect, please provide next data:" + Environment.NewLine
                     + (string.IsNullOrWhiteSpace(Configuration.SiteName) ? "SiteName" + Environment.NewLine : string.Empty)
                     + (string.IsNullOrWhiteSpace(Configuration.UserName) ? "UserName" + Environment.NewLine : string.Empty)
@@ -51,16 +54,19 @@ namespace SharePointLoader
                     + (!Configuration.FileLinks.Any() ? "File links" : string.Empty)
                     );
                 return;
-            }
+            } 
 
             //create directory for files, 
             //will create absolute or relative directory
-            Directory.CreateDirectory(Configuration.DestinationFolder);
-            var creds = GetSharePointCreds();
+            Directory.CreateDirectory(Configuration.DestinationFolder); 
+            var creds = GetSharePointCreds(); 
             foreach (var fileLink in Configuration.FileLinks)
             {
+
                 try
                 {
+                    logger.Trace($"Try to load file {fileLink}");
+
                     DownloadFilesFromSharePoint(Configuration.SiteName,
                         fileLink, Configuration.DestinationFolder,
                        creds
@@ -94,19 +100,39 @@ namespace SharePointLoader
             using (ClientContext ctx = new ClientContext(siteUrl))
             {
                 ctx.Credentials = credentials;
-                FileInformation fInfo = SPClient.File.OpenBinaryDirect(ctx, fileLink);
-                //Console.WriteLine(web.Title);Directory.GetCurrentDirectory()
-
-                var destPath = Path.Combine(localTempLocation, Path.GetFileName(fileLink));
-                using (var sReader = new StreamReader(fInfo.Stream))
+                 
+                try
                 {
-                    using (var sWriter = new StreamWriter(destPath))
+                    using (FileInformation fInfo = SPClient.File.OpenBinaryDirect(ctx, fileLink))
                     {
-                        sWriter.Write(sReader.ReadToEnd());
+                        using (var sReader = new BinaryReader(fInfo.Stream))
+                        {
+                            var destPath = Path.Combine(localTempLocation, Path.GetFileName(fileLink));
+                            using (var sWriter = new FileStream(destPath, FileMode.OpenOrCreate, FileAccess.Write))
+                            {
+                                byte[] buffer = new byte[16 * 1024];
+                                using (MemoryStream ms = new MemoryStream())
+                                {
+                                    int read;
+                                    while ((read = sReader.Read(buffer, 0, buffer.Length)) > 0)
+                                    {
+                                        ms.Write(buffer, 0, read);
+                                    }
+                                    ms.Position = 0;
+                                    ms.CopyTo(sWriter);
+                                    ms.Flush();
+                                }
+                                sWriter.Flush();
+                            }
+                            fInfo.Stream.Flush();
+                        }
                     }
                 }
-            };
+                catch (Exception ex)
+                {
+                    logger.Fatal(ex, "Can't read file");
+                }
+            }
         }
     }
-
 }

@@ -1,4 +1,5 @@
 ﻿using Newtonsoft.Json;
+ 
 using System; 
 using System.IO; 
 
@@ -7,7 +8,7 @@ namespace SharePointLoader
 
 
     public static class JsonSettings
-    {
+    { 
         public static void Save<T>(T settings) where T : class
         {
             string path = typeof(T).ToString() + ".json";
@@ -33,11 +34,14 @@ namespace SharePointLoader
                 using (StreamReader streamReader = new StreamReader(path))
                 {
                     T result = JsonConvert.DeserializeObject<T>(streamReader.ReadToEnd());
-                    streamReader.Close();
+                    streamReader.Close();  
                     return result;
                 }
             }
-            return null;
+            else
+            {
+                throw new FileNotFoundException("File with configurations not found", path);
+            } 
         }
 
     }
