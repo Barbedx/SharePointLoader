@@ -3,8 +3,7 @@ using NLog;
 using System;
 using System.IO;
 using System.Linq;
-using System.Security;
-using System.Text;
+using System.Security; 
 using SPClient = Microsoft.SharePoint.Client;
 namespace SharePointLoader
 {
@@ -29,56 +28,67 @@ namespace SharePointLoader
             catch (Exception ex)
             {
                 logger.Fatal(ex, "Error when loading configuration");
-                return;
+                Environment.Exit(-1);
             }
 
             if (args.Count() == 2 &&
                 !string.IsNullOrWhiteSpace(args[0]) &&
                 !string.IsNullOrWhiteSpace(args[1]))
-            { 
+            {
                 Configuration.UserName = args[0];
                 Configuration.Password = args[1];
-            } 
+            }
 
-            if (string.IsNullOrWhiteSpace(Configuration.SiteName) ||
+
+            if (!Configuration.Sites.Any() ||
                 string.IsNullOrWhiteSpace(Configuration.UserName) ||
                 string.IsNullOrWhiteSpace(Configuration.Password) ||
-                !Configuration.FileLinks.Any()
+                !Configuration.Sites.SelectMany(x => x.FileLinks).Any()
             )
             {
 
                 logger.Error("Configuration uncorrect, please provide next data:" + Environment.NewLine
-                    + (string.IsNullOrWhiteSpace(Configuration.SiteName) ? "SiteName" + Environment.NewLine : string.Empty)
+                    + (!Configuration.Sites.Any() ? "SiteName" + Environment.NewLine : string.Empty)
                     + (string.IsNullOrWhiteSpace(Configuration.UserName) ? "UserName" + Environment.NewLine : string.Empty)
                     + (string.IsNullOrWhiteSpace(Configuration.Password) ? "Password" + Environment.NewLine : string.Empty)
-                    + (!Configuration.FileLinks.Any() ? "File links" : string.Empty)
+                    + (!Configuration.Sites.SelectMany(x => x.FileLinks).Any() ? "File links" : string.Empty)
                     );
-                return;
-            } 
+                Environment.Exit(-2);
+
+            }
 
             //create directory for files, 
             //will create absolute or relative directory
-            Directory.CreateDirectory(Configuration.DestinationFolder); 
-            var creds = GetSharePointCreds(); 
-            foreach (var fileLink in Configuration.FileLinks)
+            Directory.CreateDirectory(Configuration.DestinationFolder);
+            var creds = GetSharePointCreds();
+            int errorsCount = 0;
+            foreach (var site in Configuration.Sites)
             {
 
-                try
+                foreach (var fileLink in site.FileLinks)
                 {
-                    logger.Trace($"Try to load file {fileLink}");
 
-                    DownloadFilesFromSharePoint(Configuration.SiteName,
-                        fileLink, Configuration.DestinationFolder,
-                       creds
-                        );
-                    logger.Trace($"File {Path.GetFileName(fileLink)} loaded from share");
-                }
-                catch (Exception ex)
-                {
-                    logger.Error(ex, $"Cannot load file {Path.GetFileName(fileLink)}");
-                }
+                    try
+                    {
+                        logger.Trace($"Try to load file {fileLink}");
 
+                        DownloadFilesFromSharePoint(site.SiteName,fileLink, Configuration.DestinationFolder,creds);
+                        logger.Trace($"File {Path.GetFileName(fileLink)} loaded from share");
+                    }
+                    catch (Exception ex)
+                    {
+                        logger.Error(ex, $"Cannot load file {Path.GetFileName(fileLink)}");
+                        errorsCount++;
+                    }
+                }
             }
+            if (errorsCount>0)
+            {
+                logger.Fatal($"Errors occurred when downloading {errorsCount} of {Configuration.Sites.SelectMany(x => x.FileLinks)} files!");
+                Environment.Exit(-3);
+            }
+            logger.Trace($"All files downloaded successfully!");
+
         }
 
         private static SharePointOnlineCredentials GetSharePointCreds()
@@ -100,7 +110,7 @@ namespace SharePointLoader
             using (ClientContext ctx = new ClientContext(siteUrl))
             {
                 ctx.Credentials = credentials;
-                 
+
                 try
                 {
                     using (FileInformation fInfo = SPClient.File.OpenBinaryDirect(ctx, fileLink))
@@ -131,6 +141,7 @@ namespace SharePointLoader
                 catch (Exception ex)
                 {
                     logger.Fatal(ex, "Can't read file");
+                    throw;
                 }
             }
         }

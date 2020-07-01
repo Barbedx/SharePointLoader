@@ -8,10 +8,12 @@ namespace SharePointLoader
 
 
     public static class JsonSettings
-    { 
+    {
+
+        private static   string FolderPath => System.IO.Path.GetDirectoryName(System.Reflection.Assembly.GetEntryAssembly().Location);
         public static void Save<T>(T settings) where T : class
         {
-            string path = typeof(T).ToString() + ".json";
+            string path = Path.Combine(FolderPath, typeof(T).ToString() + ".json");
             try
             {
                 using (StreamWriter streamWriter = new StreamWriter(path))
@@ -28,7 +30,7 @@ namespace SharePointLoader
 
         public static T Get<T>() where T : class
         {
-            string path = typeof(T).ToString() + ".json";
+            string path =Path.Combine(FolderPath, typeof(T).ToString() + ".json");
             if (File.Exists(path))
             {
                 using (StreamReader streamReader = new StreamReader(path))
