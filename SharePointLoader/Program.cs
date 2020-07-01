@@ -3,7 +3,7 @@ using NLog;
 using System;
 using System.IO;
 using System.Linq;
-using System.Security; 
+using System.Security;
 using SPClient = Microsoft.SharePoint.Client;
 namespace SharePointLoader
 {
@@ -11,7 +11,7 @@ namespace SharePointLoader
     {
         public object ServerURL { get; private set; }
         private static ConnectionConfiguration Configuration;
-        private static Logger logger = LogManager.GetCurrentClassLogger();
+        private static readonly Logger logger = LogManager.GetCurrentClassLogger();
 
         static void Main(string[] args)
         {
@@ -40,18 +40,18 @@ namespace SharePointLoader
             }
 
 
-            if (!Configuration.Sites.Any() ||
+            if (string.IsNullOrWhiteSpace(Configuration.SiteName) ||
                 string.IsNullOrWhiteSpace(Configuration.UserName) ||
-                string.IsNullOrWhiteSpace(Configuration.Password) ||
-                !Configuration.Sites.SelectMany(x => x.FileLinks).Any()
+                string.IsNullOrWhiteSpace(Configuration.Password)
+                || !Configuration.FileLinks.Any()
             )
             {
 
                 logger.Error("Configuration uncorrect, please provide next data:" + Environment.NewLine
-                    + (!Configuration.Sites.Any() ? "SiteName" + Environment.NewLine : string.Empty)
+                    + (string.IsNullOrWhiteSpace(Configuration.SiteName) ? "SiteName" + Environment.NewLine : string.Empty)
                     + (string.IsNullOrWhiteSpace(Configuration.UserName) ? "UserName" + Environment.NewLine : string.Empty)
                     + (string.IsNullOrWhiteSpace(Configuration.Password) ? "Password" + Environment.NewLine : string.Empty)
-                    + (!Configuration.Sites.SelectMany(x => x.FileLinks).Any() ? "File links" : string.Empty)
+                    + (!Configuration.FileLinks.Any() ? "File links" : string.Empty)
                     );
                 Environment.Exit(-2);
 
@@ -62,29 +62,28 @@ namespace SharePointLoader
             Directory.CreateDirectory(Configuration.DestinationFolder);
             var creds = GetSharePointCreds();
             int errorsCount = 0;
-            foreach (var site in Configuration.Sites)
+
+            foreach (var fileLink in Configuration.FileLinks)
             {
 
-                foreach (var fileLink in site.FileLinks)
+                try
                 {
+                    logger.Trace($"Try to load file {fileLink}");
 
-                    try
-                    {
-                        logger.Trace($"Try to load file {fileLink}");
-
-                        DownloadFilesFromSharePoint(site.SiteName,fileLink, Configuration.DestinationFolder,creds);
-                        logger.Trace($"File {Path.GetFileName(fileLink)} loaded from share");
-                    }
-                    catch (Exception ex)
-                    {
-                        logger.Error(ex, $"Cannot load file {Path.GetFileName(fileLink)}");
-                        errorsCount++;
-                    }
+                    DownloadFilesFromSharePoint(Configuration.SiteName, fileLink, Configuration.DestinationFolder, creds);
+                    logger.Info($"File \"{Path.GetFileName(fileLink)}\" loaded from share");
+                }
+                catch (Exception ex)
+                {
+                    logger.Error(ex, $"Cannot load file \"{Path.GetFileName(fileLink)}\"");
+                    errorsCount++;
                 }
             }
-            if (errorsCount>0)
+
+            if (errorsCount > 0)
             {
-                logger.Fatal($"Errors occurred when downloading {errorsCount} of {Configuration.Sites.SelectMany(x => x.FileLinks)} files!");
+                logger.Fatal($"Errors occurred when downloading {errorsCount} of {Configuration.FileLinks.Count} files!");
+                 
                 Environment.Exit(-3);
             }
             logger.Trace($"All files downloaded successfully!");
@@ -140,7 +139,7 @@ namespace SharePointLoader
                 }
                 catch (Exception ex)
                 {
-                    logger.Fatal(ex, "Can't read file");
+                    logger.Debug(ex, $"Can't read file {fileLink}");
                     throw;
                 }
             }
