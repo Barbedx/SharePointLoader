@@ -83,7 +83,7 @@ namespace SharePointLoader
             if (errorsCount > 0)
             {
                 logger.Fatal($"Errors occurred when downloading {errorsCount} of {Configuration.FileLinks.Count} files!");
-                 
+
                 Environment.Exit(-3);
             }
             logger.Trace($"All files downloaded successfully!");
@@ -114,27 +114,34 @@ namespace SharePointLoader
                 {
                     using (FileInformation fInfo = SPClient.File.OpenBinaryDirect(ctx, fileLink))
                     {
-                        using (var sReader = new BinaryReader(fInfo.Stream))
+                        var destPath = Path.Combine(localTempLocation, Path.GetFileName(fileLink));
+                        ctx.ExecuteQuery();
+                        using (FileStream destinationFileStream = new FileStream(destPath, FileMode.Create))
                         {
-                            var destPath = Path.Combine(localTempLocation, Path.GetFileName(fileLink));
-                            using (var sWriter = new FileStream(destPath, FileMode.OpenOrCreate, FileAccess.Write))
-                            {
-                                byte[] buffer = new byte[16 * 1024];
-                                using (MemoryStream ms = new MemoryStream())
-                                {
-                                    int read;
-                                    while ((read = sReader.Read(buffer, 0, buffer.Length)) > 0)
-                                    {
-                                        ms.Write(buffer, 0, read);
-                                    }
-                                    ms.Position = 0;
-                                    ms.CopyTo(sWriter);
-                                    ms.Flush();
-                                }
-                                sWriter.Flush();
-                            }
-                            fInfo.Stream.Flush();
+                            fInfo.Stream.CopyTo(destinationFileStream);
                         }
+
+                        //using (var sReader = new BinaryReader(fInfo.Stream))
+                        //{
+                        //    using (var sWriter = new FileStream(destPath, FileMode.OpenOrCreate, FileAccess.Write))
+                        //    {
+                        //        ctx.ExecuteQuery();
+                        //        byte[] buffer = new byte[16 * 1024];
+                        //        using (MemoryStream ms = new MemoryStream())
+                        //        {
+                        //            int read;
+                        //            while ((read = sReader.Read(buffer, 0, buffer.Length)) > 0)
+                        //            {
+                        //                ms.Write(buffer, 0, read);
+                        //            }
+                        //            ms.Position = 0;
+                        //            ms.CopyTo(sWriter);
+                        //            ms.Flush();
+                        //        }
+                        //        sWriter.Flush();
+                        //    }
+                        //    fInfo.Stream.Flush();
+                        //}
                     }
                 }
                 catch (Exception ex)
