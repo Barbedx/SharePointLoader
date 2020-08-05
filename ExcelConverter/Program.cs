@@ -29,9 +29,9 @@ namespace ExcelConverter
         }
 
         private static void RunOptions(Options options)
-        {
-            //IL_002e: Unknown result type (might be due to invalid IL or missing references)
-            //IL_0034: Expected O, but got Unknown
+        { 
+            int columnNumber = -1;
+            int rowNumber = -1;
             try
             {
                 using (FileStream fileStream = File.Open(options.InputFile, FileMode.Open, FileAccess.Read))
@@ -40,24 +40,25 @@ namespace ExcelConverter
                     {
                         using (IExcelDataReader reader = ExcelReaderFactory.CreateReader(fileStream))
                         {
-                            using (JsonTextWriter jsonWriter = new JsonTextWriter(streamWriter))
+                            using (JsonTextWriter jsonWriter = new JsonTextWriter(streamWriter) { Formatting = Formatting.Indented })
                             {
+
                                 while (reader.Name.ToLower() != options.SheetName.ToLower())
                                 {
                                     reader.NextResult();
                                 }
-                                jsonWriter.Formatting = Formatting.Indented;
-                                for (int i = 0; i < options.SkipRows; i++)
+                                for (rowNumber = 0; rowNumber < options.SkipRows; rowNumber++)
                                 {
                                     reader.Read();
                                 }
                                 List<string> titles = GetOrCreateHeader(options, reader);
-                                ((JsonWriter)jsonWriter).WriteStartArray();
+                                jsonWriter.WriteStartArray();
                                 while (reader.Read())
                                 {
+                                    rowNumber++;
                                     if (options.MainColumn.HasValue)
                                     {
-                                        if (string.IsNullOrEmpty(reader.GetString(options.MainColumn.Value)))
+                                        if (string.IsNullOrEmpty(reader[(options.MainColumn.Value)]?.ToString()))
                                         {
                                             break;
                                         }
@@ -67,12 +68,17 @@ namespace ExcelConverter
                                         break;
                                     }
                                     jsonWriter.WriteStartObject();
-                                    var columnsCount = reader.FieldCount < options.Columns ? reader.FieldCount : options.Columns;
 
-                                    for (int column = 0; column < columnsCount; column++)
+                                    var columnsCount = reader.FieldCount < options.Columns ? reader.FieldCount : options.Columns;
+                                    for (  columnNumber = 0; columnNumber < columnsCount; columnNumber++)
                                     {
-                                        jsonWriter.WritePropertyName(titles[column]);
-                                        jsonWriter.WriteValue((reader)[column] ?? string.Empty);
+                                        jsonWriter.WritePropertyName(titles[columnNumber]);
+                                        jsonWriter.WriteValue((reader)[columnNumber] ?? string.Empty);
+                                    }
+                                    if (options.WithIdColumn)
+                                    {
+                                        jsonWriter.WritePropertyName(options.IdentityRowColumnName);
+                                        jsonWriter.WriteValue(rowNumber); 
                                     }
                                     jsonWriter.WriteEndObject();
                                 }
@@ -85,7 +91,7 @@ namespace ExcelConverter
             }
             catch (Exception ex)
             {
-                Console.WriteLine("Program filed with message:" + ex.Message);
+                Console.WriteLine($"Program failed on row {rowNumber} and column {columnNumber} with message:{ex.Message}");
                 Environment.Exit(-1);
             }
         }
@@ -93,13 +99,14 @@ namespace ExcelConverter
         private static List<string> GetOrCreateHeader(Options options, IExcelDataReader reader)
         {
             List<string> list = new List<string>();
+   
             if (options.WithHeader)
             {
                 reader.Read();
                 var columnsCount = reader.FieldCount < options.Columns ? reader.FieldCount : options.Columns;
                 for (int i = 0; i < columnsCount; i++)
                 {
-                    string title = reader.GetString(i);
+                    string title = reader[i]?.ToString();
                     title = string.IsNullOrWhiteSpace(title) ? ((char)(65 + i)).ToString() : title;
                     list.Add(list.Any((string x) => x.Equals(title)) ? (title + $"({(char)(65 + i)})") : title);
                 }
@@ -119,7 +126,7 @@ namespace ExcelConverter
             bool result = true;
             for (int i = 0; i < options.CheckColumns; i++)
             {
-                if (!string.IsNullOrWhiteSpace(reader.GetString(i)))
+                if (!string.IsNullOrWhiteSpace(reader[i]?.ToString()))
                 {
                     result = false;
                     break;
