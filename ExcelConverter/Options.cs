@@ -23,8 +23,12 @@ namespace ExcelConverter
             [Option('h', "withHeader",  HelpText = "First reading row is a header. If false - set column leteral as header")]
             public bool WithHeader { get; set; }
 
+            [Option('n', "numericHeader",  HelpText = "Use column identity number as header value instead of litteral char name. 1-based.")]
+            public bool NumericHeader { get; set; }
+
             [Option('i', "withIdColumn", HelpText = "Add column for identity rows")]
             public bool WithIdColumn { get; set; }
+
             [Option("IdentityRowColumnName", Default = "ExcelRowId", HelpText = "Column name for identity row, default = \"ExcelRowId\"")]
             public string IdentityRowColumnName { get; set; }
 
@@ -33,6 +37,7 @@ namespace ExcelConverter
 
             [Option("checkColumns", Required = false, Default = 5, HelpText = "count of first N columns to check for existing row, default first 5 columns. If this columns are empty - close reader and save result")]
             public int CheckColumns { get; set; }
+
         }
     }
 }

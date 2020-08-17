@@ -29,7 +29,7 @@ namespace ExcelConverter
         }
 
         private static void RunOptions(Options options)
-        { 
+        {
             int columnNumber = -1;
             int rowNumber = -1;
             try
@@ -46,6 +46,8 @@ namespace ExcelConverter
                                 while (reader.Name.ToLower() != options.SheetName.ToLower())
                                 {
                                     reader.NextResult();
+                                    if (reader.Name is null)
+                                        throw new Exception($"Can't find sheet with the name \"{options.SheetName}\" in file");
                                 }
                                 for (rowNumber = 0; rowNumber < options.SkipRows; rowNumber++)
                                 {
@@ -70,7 +72,7 @@ namespace ExcelConverter
                                     jsonWriter.WriteStartObject();
 
                                     var columnsCount = reader.FieldCount < options.Columns ? reader.FieldCount : options.Columns;
-                                    for (  columnNumber = 0; columnNumber < columnsCount; columnNumber++)
+                                    for (columnNumber = 0; columnNumber < columnsCount; columnNumber++)
                                     {
                                         jsonWriter.WritePropertyName(titles[columnNumber]);
                                         jsonWriter.WriteValue((reader)[columnNumber] ?? string.Empty);
@@ -78,7 +80,7 @@ namespace ExcelConverter
                                     if (options.WithIdColumn)
                                     {
                                         jsonWriter.WritePropertyName(options.IdentityRowColumnName);
-                                        jsonWriter.WriteValue(rowNumber); 
+                                        jsonWriter.WriteValue(rowNumber - options.SkipRows);
                                     }
                                     jsonWriter.WriteEndObject();
                                 }
@@ -99,7 +101,7 @@ namespace ExcelConverter
         private static List<string> GetOrCreateHeader(Options options, IExcelDataReader reader)
         {
             List<string> list = new List<string>();
-   
+
             if (options.WithHeader)
             {
                 reader.Read();
@@ -107,15 +109,26 @@ namespace ExcelConverter
                 for (int i = 0; i < columnsCount; i++)
                 {
                     string title = reader[i]?.ToString();
-                    title = string.IsNullOrWhiteSpace(title) ? ((char)(65 + i)).ToString() : title;
-                    list.Add(list.Any((string x) => x.Equals(title)) ? (title + $"({(char)(65 + i)})") : title);
+                    if (string.IsNullOrEmpty(title))
+                    {
+                        title = options.NumericHeader ? (i + 1).ToString() : GetExcelColumnName(i);
+                    }
+                    //title = string.IsNullOrWhiteSpace(title) ?
+                    //    (options.NumericHeader ? (i + 1).ToString() : GetExcelColumnName(i)) : title;
+
+                    while (list.Any(x => x.Equals(title))) //if there are some dublicates
+                    {//if there are column like this - add "Copy(number of excel column current position ) to the end
+                        title += "copy(" + (options.NumericHeader ? (i + 1).ToString() : GetExcelColumnName(i)) + ")";
+                    }
+                    list.Add(title);
+
                 }
             }
             else
             {
                 for (int j = 0; j < options.Columns; j++)
                 {
-                    list.Add($"{(char)(65 + j)}");
+                    list.Add(options.NumericHeader ? (j + 1).ToString() : GetExcelColumnName(j));
                 }
             }
             return list;
@@ -133,6 +146,22 @@ namespace ExcelConverter
                 }
             }
             return result;
+        }
+
+        private static string GetExcelColumnName(int columnNumber, bool zeroBased = true)
+        {
+            int dividend = columnNumber + (zeroBased ? 1 : 0);
+            string columnName = string.Empty;
+            int modulo;
+
+            while (dividend > 0)
+            {
+                modulo = (dividend - 1) % 26;
+                columnName = Convert.ToChar(65 + modulo).ToString() + columnName;
+                dividend = (int)((dividend - modulo) / 26);
+            }
+
+            return columnName;
         }
     }
 }
